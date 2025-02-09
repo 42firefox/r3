@@ -1,0 +1,1366 @@
+---
+title: "Heating and cooling Vienna 2040"
+author: "Evtushenko Sofia"
+output:
+  rmdformats::robobook:
+    lightbox: true
+    toc_depth: 3
+    css: styles.css
+date: "2025-01-24"
+bibliography: references.bib
+csl: nature.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+According to the World Meteorological Organization report, the last 10 years have been the warmest years on record and global CO₂ emissions continue to increase making the Paris Agreement temperature goal not yet achieved, but rather in danger. @wmo2025warmest Therefore, many countries try to comply with the green agenda by implementing various measures to reduce emissions. However, environmental efforts go beyond the state level, reaching regions, cities, and even districts – where green initiatives come from different spheres and institutions.
+
+The City of Vienna has long been committed to a consistent course of action, giving top priority to all issues related to climate and the environment. In line with the European Union's agenda to reduce emissions by 55% by 2030 (“Fit 55”) and achieve climate neutrality by 2050 (“European Climate Law”), Vienna has developed its own strategies to improve the climate situation: “Climate model city 2040”, “Smart Climate City Strategy Vienna”, “Vienna Climate Guide”. However, the author's attention is drawn to the strategy for the transition of the city's heating and cooling systems to climate-neutral, emission-free and renewable technologies by 2040 called “The Heating and Cooling Vienna 2040”. @vienna2022phasingoutgas
+
+The importance of this initiative lies in the complete decarbonization of the city's central heating and the corresponding decomposition of energy sources currently involved in the heating and cooling systems. Reducing the dependence of heat generation on gas can not only protect the climate and the environment but also stabilize prices in this market (as gas prices are currently unstable and relatively high). And as a full-fledged resident of Vienna, the author is concerned not only about global warming and snowless Vienna winters, but also about hot water bills.
+
+## Research question
+
+The scope of the considered economic policy is a transition to net zero CO₂ emissions of cooling and heating systems in the city of Vienna, which is expected to happen by 2040. More specifically the author aims to address the following questions:
+
+-	What is a share of CO₂ emissions related to household heating/cooling and how it changes over time?
+
+-	How are environmental laws and international agreements influencing these emissions?
+
+-	What are household heating/cooling energy sources now and in the future? 
+
+
+## Data
+
+“Phasing Out Gas: Heating and Cooling Vienna 2040” is a document published by the City of Vienna in 2023, which describes a strategy for a climate-neutral heating/cooling transition. This strategy includes replacing approximately 600,000 gas-based heating units with district heating, heat pumps, and heat networks. @vienna2022phasingoutgas
+
+Now district heating is already a key component and its role will increase in the future. In terms of power by 2040 it will solely rely on renewable or waste energy sources instead of fossil fuels. The current and predicted composition of energy sources of district heating is available in the table below.
+
+```{r, echo=FALSE, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(ggtext)
+library(knitr)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+save_path <- ".//p5.png"
+all_data <- read_excel("./District_Heat.xlsx") %>%
+  mutate(source = str_to_upper(source)) %>%
+  mutate(source = str_replace_all(source, " ", "_")) %>%
+mutate(source = str_replace_all(source, "-", "_"))
+
+df_long <- all_data %>%
+  pivot_longer(
+    cols = c("2019", "2030", "2040"), 
+    names_to = "YEAR",
+    values_to = "value"
+  )
+
+df_wide <- df_long %>%
+  pivot_wider(
+    names_from = source,
+    values_from = value
+  )
+
+
+kable(df_wide, caption = "Current and predicted composition of district heating energy sources. All values are in GWh/a.")
+```
+
+data.gv.at is a decentralized data catalog of the administration in Austria, where data provided by the federal government, cities, states, and municipalities can be found. “Emissions of global warming gases of CO₂ equivalents in Vienna classified into sectors” is the dataset provided by the City of Vienna, which covers 1991 - 2021 years. Starting from 2022 the values were interpolated to reach the "neutrality" point by 2040. Samples of the dataset are available in the table below. @datagvco2emissions
+
+```{r, echo=FALSE, message=FALSE}
+library(knitr)
+library(tidyverse)
+library(rstudioapi)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+read_data_path <- ".//thgsektoren2021.csv"
+all_data <- read_csv2(
+  read_data_path,
+  locale = locale(decimal_mark = ",", grouping_mark = " ")
+)
+
+all_data <- all_data %>%
+  mutate(OTHER = FLUORINATED_GASES + AGRICULTURE)
+
+feature_field_names <- c(
+  "BUILDINGS",
+  "TRANSPORT",
+  "ENERGY_SUPPLY",
+  "WASTE_MANAGEMENT",
+  "INDUSTRY",
+  "OTHER"
+)
+
+# remove other columns
+all_data <- all_data %>%
+  select(YEAR, all_of(feature_field_names)) %>%
+  filter(YEAR >= 2000) %>%
+  slice(1:5)
+
+
+kable(all_data, caption = "The first five rows of the CO₂ emissions dataset (from observed period). All values are in Mt (mega tonnes).")
+```
+
+The following data limitations can be named:
+
+- The main CO₂ emissions dataset contains values only until 2021 (including), which is common for datasets from data.gv.at to be a few years behind.
+- Interpolation for years starting from 2022 is made in a way of proportional decreasing due to lack of available precise predictions with year granularity, which can be considered oversimplified.
+
+## Result
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=9, fig.width=16, fig.cap="Vienna´s greenhouse gas emissions by sectors 2000-2040. Click to zoom."}
+library(tidyverse)
+library(readxl)
+library(ggstream)
+library(ggtext)
+library(rstudioapi)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+read_data_path <- ".//thgsektoren2021.csv"
+save_path <- ".//chart.png"
+
+all_data <- read_csv2(
+  read_data_path,
+  locale = locale(decimal_mark = ",", grouping_mark = " ")
+)
+
+all_data <- all_data %>%
+  mutate(OTHER = FLUORINATED_GASES + AGRICULTURE)
+
+feature_field_names <- c(
+  "BUILDINGS",
+  "TRANSPORT",
+  "ENERGY_SUPPLY",
+  "WASTE_MANAGEMENT",
+  "INDUSTRY",
+  "OTHER"
+)
+
+# remove other columns
+all_data <- all_data %>%
+  select(YEAR, all_of(feature_field_names))
+
+
+# interpolation
+
+current_year <- 2021
+future_years_start <- 2022
+future_years_end <- 2040 
+future_years <- future_years_start:future_years_end
+
+current_values <- all_data %>%
+  filter(YEAR == current_year) %>%
+  select(-YEAR)
+
+fractions <- (future_years - current_year) / (future_years_end - current_year) 
+future_data <- map2_dfr(
+  future_years, fractions,
+  ~ tibble(
+    YEAR = .x
+    # Multiply by (1 - fraction) so that it goes from 1 at current_year to 0 at future_years_end
+  ) %>%
+    bind_cols(current_values * (1 - .y))
+)
+
+all_data <- bind_rows(all_data, future_data)
+
+# change dimensions for ggstream
+all_data <- all_data %>%
+  pivot_longer(
+    cols = feature_field_names,
+    names_to = "type",
+    values_to = "value"
+  )
+
+
+################### DRAWR GRAPH
+
+#Color palette
+pal=c("#52271c", "#944839", "#c08e39", "#7f793c", "#565c33", "#184948", "#022a2a")
+
+# Stacked area chart with smoothing
+p <- all_data %>% 
+  filter(YEAR >= 2000) %>%
+  mutate(type = factor(type, levels = feature_field_names)) %>% 
+  ggplot(aes(YEAR, value, label = type)) +
+  geom_stream(aes(fill = type), type = "ridge", n_grid = 15000, bw=0.85, method = "new_wiggle", true_range = "both", sorting = "none", inherit.aes = TRUE)  +
+  
+  geom_segment(aes(x = 2016, y = 0, xend = 2016, yend = 8300 + 400),color="black") +
+  geom_point(aes(x = 2016, y = 8300+400),color="black") +
+  annotate("text", x = 2016, y = 8300+600,
+           label = "Paris Agreement",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  
+  # transparent filter
+  annotate("rect", xmin = 2021, xmax = 2040, ymin = 0, ymax = 8400,
+           fill = "white", alpha = 0.3, color = NA) + 
+  
+  
+  geom_segment(aes(x = 2021, y = 0, xend = 2021, yend = 7800 + 400),color="black") +
+  geom_point(aes(x = 2021, y = 7800+400),color="black") +
+  annotate("text", x = 2021, y = 7800+600,
+           label = "European Climate Law (by 2050)",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2040, y = 0, xend = 2040, yend = 2000 + 400),color="black") +
+  geom_point(aes(x = 2040, y = 2000+400),color="black") +
+  annotate("text", x = 2040, y = 2000+600,
+           label = "Neutrality by 2040                              ",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2023, y = 0, xend = 2023, yend = 7300 + 400),color="black") +
+  geom_point(aes(x = 2023, y = 7300+400),color="black") +
+  annotate("text", x = 2023, y = 7300+600,
+           label = "Phasing Out Gas",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2030, y = 0, xend = 2030, yend = 5000 + 400),color="black") +
+  geom_point(aes(x = 2030, y = 5000+400),color="black") +
+  annotate("text", x = 2030, y = 5000+600,
+           label = "Fit for 55",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2008, y = 0, xend = 2008, yend = 9300 + 400),color="black") +
+  geom_point(aes(x = 2008, y = 9300+400),color="black") +
+  annotate("text", x = 2008, y = 9300+600,
+           label = "EU Climate and Energy Package",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2011, y = 0, xend = 2011, yend = 8800 + 400),color="black") +
+  geom_point(aes(x = 2011, y = 8800+400),color="black") +
+  annotate("text", x = 2011, y = 8800+600,
+           label = "Klimaschutzgesetz",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2040, y = 9800 + 400,
+           label = "Vienna´s greenhouse gas emissions by sectors 2000-2040:",
+           hjust=1,
+           size=6,
+           lineheight=.9,
+           fontface="bold", family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2040, y = 8300 +320,
+           label = "8.4 million tonnes of\nCO₂ equivalents\nin 2021",
+           hjust=1,
+           size=17,
+           lineheight=.9,
+           fontface="bold", family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2001, y = 8500,
+           label = "Buildings (heat)",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 5650,
+           label = "Transport",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 2500,
+           label = "Energy Supply",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 1030,
+           label = "Waste Management",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 530,
+           label = "Industry",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 135,
+           label = "Other",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  
+  
+  annotate("text", x = 2000, y = 10300,
+           label = "[Mt]",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2000, y = 0, xend = 2000, yend = 10100),color="black") +
+  
+  scale_fill_manual(
+    values=pal,
+    labels = c(
+      "WASTE_MANAGEMENT" = "Waste Management",
+      "TRANSPORT" = "Transport",
+      "INDUSTRY" = "Industry",
+      "ENERGY_SUPPLY" = "Energy Supply",
+      "BUILDINGS" = "Buildings",
+      "OTHER" = "Other")
+  ) + 
+  scale_x_continuous(
+    breaks=c(2000,2008,2011,2016, 2021, 2023, 2030, 2040),
+    labels = c("2000", "2008", "2011",  "2016", "2021", "2023", "2030", "2040"),
+    limits = c(2000, 2040),
+    expand = c(0,0)
+  ) +
+  # 7650 and 9830 are different and were selected manually because of ggstream smoothing
+  scale_y_continuous(
+    breaks=c(7650,9830),
+    labels = c("8.4", "10.1"),
+    expand = c(0,0)
+  ) +
+  coord_cartesian(clip = "off") + 
+  xlab("") +
+  ylab("") + 
+  labs(
+    caption = "Source: Treibhausgasemissionen nach Sektoren Wien 2021, Stadt Wien. Heating and Cooling Vienna 2040 Report. Figure: Sofia Evtushenko"
+  ) +
+  theme_minimal() + 
+  theme(
+    panel.grid = element_blank(),
+    axis.ticks.y = element_line(color = "black", size = 0.5),
+    axis.ticks.length = unit(0.25, "cm"),
+    axis.line.x = element_line(color = "black"),
+    axis.text.y = element_text(color="black", size=12,margin = margin(5,5,0,0), family = "Roboto Condensed"),
+    axis.text.x = element_text(color="black", size=12,margin = margin(5,0,0,0), family = "Roboto Condensed"),
+    plot.margin = margin(20,50,20,10),
+    legend.position = "none",
+    legend.title = element_blank(),
+    legend.key.width = unit(0.2, "cm"),
+    legend.key.height = unit(1, "cm"),
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.background  = element_rect(fill = "white", color = "white"),
+    plot.caption = element_text(family = "Roboto Condensed", size = 12)
+  )
+
+ggsave(
+  save_path,
+  plot=p,
+  dpi=320,
+  width = 16,
+  height = 9
+)
+knitr::include_graphics(save_path)
+```
+
+The chart demonstrates Vienna's greenhouse CO₂ emission distribution between 2000 and 2021 years as well as a forecast until 2040 divided by sectors. It also contains environmental laws and agreements whose effect can be evaluated over time (the development and implementation of strategies of global communities and Austria in particular to improve the ecological environment influence the reduction of emissions). The emissions contributed by household heating and cooling (represented as "Buildings") have a significant share in total. However, they are expected to decrease (as well as the rest of emissions caused by other sectors) to the "neutrality" point by 2040. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=7, fig.width=9, fig.cap="Future composition of district heating energy sources [GWh/a]. Click to zoom."}
+library(tidyverse)
+library(readxl)
+library(ggtext)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+save_path <- ".//p5.png"
+all_data <- read_excel("./District_Heat.xlsx")
+
+all_data <- all_data %>%
+  pivot_longer(
+    cols = c("2019", "2030", "2040"),
+    names_to = "year",
+    values_to = "value"
+  )
+
+# Convert category_var to a factor with a specified order
+all_data$source <- factor(all_data$source, 
+                          levels = c(
+                            "Heat pump + Power-to-heat",
+                            "Geothermal energy",
+                            "Biomass heating plant",
+                            "Natural gas (CHP)",
+                            "Natural gas heating plant",
+                            "Heat imports",
+                            "Thermal waste incineration"
+                          )
+)
+
+pal=c("#52271c", "#944839", "#c08e39", "#7f793c", "#565c33", "#184948", "#022a2a")
+
+p <- all_data %>% 
+  ggplot(aes(x = year, weight  = value)) + 
+  geom_bar(aes(fill = source), width = 0.75) +
+  
+  
+  
+  
+  ################## COLUMN 1 #####################
+
+annotate("text", x = "2019", y = 1750/2,
+         label = "1,750",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + (700)/2,
+           label = "700",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + (450)/2,
+           label = "450",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + (3350)/2,
+           label = "3,350",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + 3350 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + 3350 + 150 + (100)/2 + 80,
+           label = "100",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#52271c",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 6500 + 200,
+           label = "6,500",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 1 #####################
+
+################## COLUMN 2 #####################
+
+annotate("text", x = "2030", y = 1750/2,
+         label = "1,750",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + (250)/2,
+           label = "250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + (350)/2,
+           label = "350",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + (2450)/2,
+           label = "2,450",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + 150 + (900)/2,
+           label = "900",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + 150 + 900 + (1250)/2,
+           label = "1,250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 7100 + 200,
+           label = "7,100",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 2 #####################
+
+################## COLUMN 3 #####################
+
+annotate("text", x = "2040", y = 1600/2,
+         label = "1,600",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + (200)/2,
+           label = "200",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#184948",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + (650)/2,
+           label = "650",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + (950)/2,
+           label = "950",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + 150 + (2250)/2,
+           label = "2,250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + 150 + 2250 + (1850)/2,
+           label = "1,850",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 7600 + 200,
+           label = "7,600",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 3 #####################
+
+
+scale_x_discrete(
+  expand = c(0.4,0)
+) + 
+  
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) + 
+  theme_minimal() + 
+  xlab("") +
+  ylab("") + 
+  scale_fill_manual(
+    values=pal
+  ) + 
+  labs(
+    caption = "Source: Heating and Cooling Vienna 2040 Report. Figure: Sofia Evtushenko",
+    title = "Future composition of district heating energy sources [GWh/a]"
+  ) +
+  theme(
+    panel.grid = element_blank(),
+    
+    axis.text.y=element_blank(),
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.background  = element_rect(fill = "white", color = "white"),
+    axis.text.x = element_text(color = "black", family = "Roboto Condensed", size=13),
+    axis.line.x = element_line(color = "black", size = 0.5),
+    
+    
+    plot.margin = margin(20,150,5,0),
+    
+    legend.title = element_blank(),
+    legend.key.width = unit(0.4, "cm"),
+    legend.key.height = unit(1, "cm"),
+    legend.box.margin = margin(0, 0, 0, 0), 
+    legend.spacing = unit(0, "pt"),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.position = c(1.1, 0.5),
+    legend.text = element_text(family = "Roboto Condensed", size = 13),
+    
+    plot.caption = element_text(family = "Roboto Condensed", size = 12, hjust = 2),
+    plot.title = element_text(family = "Roboto Condensed", size = 24, face = "bold")
+  )
+
+ggsave(
+  save_path,
+  plot=p,
+  dpi=320,
+  width = 9,
+  height = 7
+)
+knitr::include_graphics(save_path)
+```
+
+The chart shows the expected change in the composition of energy sources for district heating in Vienna up to 2040. By the planned neutrality, gas use in heating systems is expected to decrease by almost 58% (compared to 2019), while geothermal energy is expected to become the most used source (almost 30% of total sources) followed by heat pumps and thermal waste incineration.
+
+## Conclusion
+
+Vienna is expected to become CO₂-neutral by 2040. One way to achieve this is to transform the city's heating and cooling systems, a truly large-scale project that will improve the environment and potentially balance heating prices in different residential/serviced spaces. Various laws and agreements in the EU and around the world are also key drivers of this change. Notable examples include the Paris Agreement, Fit 55 and the European Climate Law.
+
+One of the largest sources of CO₂ emissions is the space heating/cooling sector. The current gas heating systems are planned to be gradually replaced by environmentally friendly alternatives, which will eliminate the direct use of natural gas as the main energy resource in favor of heat pumps and geothermal energy. @vienna2022phasingoutgas The author is confident that this initiative will allow Vienna and Austria as a whole to take another big step towards saving the planet from pollution.
+
+## Appendix
+
+### Code
+
+#### Chart 1
+
+```{r, eval = FALSE}
+library(tidyverse)
+library(readxl)
+library(ggstream)
+library(ggtext)
+library(rstudioapi)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+save_path <- ".//p3.png"
+read_data_path <- ".//thgsektoren2021.csv"
+
+all_data <- read_csv2(
+  read_data_path,
+  locale = locale(decimal_mark = ",", grouping_mark = " ")
+)
+
+all_data <- all_data %>%
+  mutate(OTHER = FLUORINATED_GASES + AGRICULTURE)
+
+feature_field_names <- c(
+  "BUILDINGS",
+  "TRANSPORT",
+  "ENERGY_SUPPLY",
+  "WASTE_MANAGEMENT",
+  "INDUSTRY",
+  "OTHER"
+)
+
+# remove other columns
+all_data <- all_data %>%
+  select(YEAR, all_of(feature_field_names))
+
+
+# interpolation
+
+current_year <- 2021
+future_years_start <- 2022
+future_years_end <- 2040 
+future_years <- future_years_start:future_years_end
+
+current_values <- all_data %>%
+  filter(YEAR == current_year) %>%
+  select(-YEAR)
+
+fractions <- (future_years - current_year) / (future_years_end - current_year) 
+future_data <- map2_dfr(
+  future_years, fractions,
+  ~ tibble(
+    YEAR = .x
+    # Multiply by (1 - fraction) so that it goes from 1 at current_year to 0 at future_years_end
+  ) %>%
+    bind_cols(current_values * (1 - .y))
+)
+
+all_data <- bind_rows(all_data, future_data)
+
+# change dimensions for ggstream
+all_data <- all_data %>%
+  pivot_longer(
+    cols = feature_field_names,
+    names_to = "type",
+    values_to = "value"
+  )
+
+
+################### DRAWR GRAPH
+
+#Color palette
+pal=c("#52271c", "#944839", "#c08e39", "#7f793c", "#565c33", "#184948", "#022a2a")
+
+# Stacked area chart with smoothing
+all_data %>% 
+  filter(YEAR >= 2000) %>%
+  mutate(type = factor(type, levels = feature_field_names)) %>% 
+  ggplot(aes(YEAR, value, label = type)) +
+  geom_stream(aes(fill = type), type = "ridge", n_grid = 15000, bw=0.85, method = "new_wiggle", true_range = "both", sorting = "none", inherit.aes = TRUE)  +
+  
+  geom_segment(aes(x = 2016, y = 0, xend = 2016, yend = 8300 + 400),color="black") +
+  geom_point(aes(x = 2016, y = 8300+400),color="black") +
+  annotate("text", x = 2016, y = 8300+600,
+           label = "Paris Agreement",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  
+  # transparent filter
+  annotate("rect", xmin = 2021, xmax = 2040, ymin = 0, ymax = 8400,
+           fill = "white", alpha = 0.3, color = NA) + 
+  
+  
+  geom_segment(aes(x = 2021, y = 0, xend = 2021, yend = 7800 + 400),color="black") +
+  geom_point(aes(x = 2021, y = 7800+400),color="black") +
+  annotate("text", x = 2021, y = 7800+600,
+           label = "European Climate Law (by 2050)",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2040, y = 0, xend = 2040, yend = 2000 + 400),color="black") +
+  geom_point(aes(x = 2040, y = 2000+400),color="black") +
+  annotate("text", x = 2040, y = 2000+600,
+           label = "Neutrality by 2040                              ",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2023, y = 0, xend = 2023, yend = 7300 + 400),color="black") +
+  geom_point(aes(x = 2023, y = 7300+400),color="black") +
+  annotate("text", x = 2023, y = 7300+600,
+           label = "Phasing Out Gas",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2030, y = 0, xend = 2030, yend = 5000 + 400),color="black") +
+  geom_point(aes(x = 2030, y = 5000+400),color="black") +
+  annotate("text", x = 2030, y = 5000+600,
+           label = "Fit for 55",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2008, y = 0, xend = 2008, yend = 9300 + 400),color="black") +
+  geom_point(aes(x = 2008, y = 9300+400),color="black") +
+  annotate("text", x = 2008, y = 9300+600,
+           label = "EU Climate and Energy Package",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2011, y = 0, xend = 2011, yend = 8800 + 400),color="black") +
+  geom_point(aes(x = 2011, y = 8800+400),color="black") +
+  annotate("text", x = 2011, y = 8800+600,
+           label = "Klimaschutzgesetz",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2040, y = 9800 + 400,
+           label = "Vienna´s greenhouse gas emissions by sectors 2000-2040:",
+           hjust=1,
+           size=6,
+           lineheight=.9,
+           fontface="bold", family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2040, y = 8300 +320,
+           label = "8.4 million tonnes of\nCO₂ equivalents\nin 2021",
+           hjust=1,
+           size=17,
+           lineheight=.9,
+           fontface="bold", family="Roboto Condensed",
+           color="black") +
+  
+  annotate("text", x = 2001, y = 8500,
+           label = "Buildings (heat)",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 5650,
+           label = "Transport",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 2500,
+           label = "Energy Supply",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 1030,
+           label = "Waste Management",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 530,
+           label = "Industry",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = 2001, y = 135,
+           label = "Other",
+           hjust=0,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  
+  
+  annotate("text", x = 2000, y = 10300,
+           label = "[Mt]",
+           hjust=0.5,
+           size=5,
+           lineheight=.8,
+           fontface="bold",family="Roboto Condensed",
+           color="black") +
+  
+  geom_segment(aes(x = 2000, y = 0, xend = 2000, yend = 10100),color="black") +
+  
+  scale_fill_manual(
+    values=pal,
+    labels = c(
+      "WASTE_MANAGEMENT" = "Waste Management",
+      "TRANSPORT" = "Transport",
+      "INDUSTRY" = "Industry",
+      "ENERGY_SUPPLY" = "Energy Supply",
+      "BUILDINGS" = "Buildings",
+      "OTHER" = "Other")
+  ) + 
+  scale_x_continuous(
+    breaks=c(2000,2008,2011,2016, 2021, 2023, 2030, 2040),
+    labels = c("2000", "2008", "2011",  "2016", "2021", "2023", "2030", "2040"),
+    limits = c(2000, 2040),
+    expand = c(0,0)
+  ) +
+  # 7650 and 9830 are different and were selected manually because of ggstream smoothing
+  scale_y_continuous(
+    breaks=c(7650,9830),
+    labels = c("8.4", "10.1"),
+    expand = c(0,0)
+  ) +
+  coord_cartesian(clip = "off") + 
+  xlab("") +
+  ylab("") + 
+  labs(
+    caption = "Source: Treibhausgasemissionen nach Sektoren Wien 2021, Stadt Wien. Heating and Cooling Vienna 2040 Report. Figure: Sofia Evtushenko"
+  ) +
+  theme_minimal() + 
+  theme(
+    panel.grid = element_blank(),
+    axis.ticks.y = element_line(color = "black", size = 0.5),
+    axis.ticks.length = unit(0.25, "cm"),
+    axis.line.x = element_line(color = "black"),
+    axis.text.y = element_text(color="black", size=12,margin = margin(5,5,0,0), family = "Roboto Condensed"),
+    axis.text.x = element_text(color="black", size=12,margin = margin(5,0,0,0), family = "Roboto Condensed"),
+    plot.margin = margin(20,50,20,10),
+    legend.position = "none",
+    legend.title = element_blank(),
+    legend.key.width = unit(0.2, "cm"),
+    legend.key.height = unit(1, "cm"),
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.background  = element_rect(fill = "white", color = "white"),
+    plot.caption = element_text(family = "Roboto Condensed", size = 12)
+  )
+
+
+
+ggsave(
+  save_path,
+  dpi=320,
+  width = 16,
+  height = 9
+)
+```
+
+#### Chart 2
+
+```{r, eval=FALSE}
+library(tidyverse)
+library(readxl)
+library(ggtext)
+
+# Set the working directory to the script's location
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+save_path <- ".//p5.png"
+all_data <- read_excel("./District_Heat.xlsx")
+
+all_data <- all_data %>%
+  pivot_longer(
+    cols = c("2019", "2030", "2040"),
+    names_to = "year",
+    values_to = "value"
+  )
+
+# Convert category_var to a factor with a specified order
+all_data$source <- factor(all_data$source, 
+                          levels = c(
+                            "Heat pump + Power-to-heat",
+                            "Geothermal energy",
+                            "Biomass heating plant",
+                            "Natural gas (CHP)",
+                            "Natural gas heating plant",
+                            "Heat imports",
+                            "Thermal waste incineration"
+                          )
+)
+
+pal=c("#52271c", "#944839", "#c08e39", "#7f793c", "#565c33", "#184948", "#022a2a")
+
+all_data %>% 
+  ggplot(aes(x = year, weight  = value)) + 
+  geom_bar(aes(fill = source), width = 0.75) +
+  
+  
+  
+  
+  ################## COLUMN 1 #####################
+
+annotate("text", x = "2019", y = 1750/2,
+         label = "1,750",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + (700)/2,
+           label = "700",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + (450)/2,
+           label = "450",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + (3350)/2,
+           label = "3,350",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + 3350 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 1750 + 700 + 450 + 3350 + 150 + (100)/2 + 80,
+           label = "100",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#52271c",
+           angle = 0) +
+  
+  annotate("text", x = "2019", y = 6500 + 200,
+           label = "6,500",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 1 #####################
+
+################## COLUMN 2 #####################
+
+annotate("text", x = "2030", y = 1750/2,
+         label = "1,750",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + (250)/2,
+           label = "250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + (350)/2,
+           label = "350",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + (2450)/2,
+           label = "2,450",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + 150 + (900)/2,
+           label = "900",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 1750 + 250 + 350 + 2450 + 150 + 900 + (1250)/2,
+           label = "1,250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2030", y = 7100 + 200,
+           label = "7,100",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 2 #####################
+
+################## COLUMN 3 #####################
+
+annotate("text", x = "2040", y = 1600/2,
+         label = "1,600",
+         hjust=0.5,
+         size=5,
+         lineheight=.9,
+         family="Roboto Condensed",
+         color="white",
+         angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + (200)/2,
+           label = "200",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#184948",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + (650)/2,
+           label = "650",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + (950)/2,
+           label = "950",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + (150)/2,
+           label = "150",
+           hjust=3.4,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="#c08e39",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + 150 + (2250)/2,
+           label = "2,250",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 1600 + 200 + 650 + 950 + 150 + 2250 + (1850)/2,
+           label = "1,850",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           family="Roboto Condensed",
+           color="white",
+           angle = 0) +
+  
+  annotate("text", x = "2040", y = 7600 + 200,
+           label = "7,600",
+           hjust=0.5,
+           size=5,
+           lineheight=.9,
+           fontface="bold",
+           family="Roboto Condensed",
+           color="black",
+           angle = 0) +
+  
+  ################## COLUMN 3 #####################
+
+
+scale_x_discrete(
+  expand = c(0.4,0)
+) + 
+  
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) + 
+  theme_minimal() + 
+  xlab("") +
+  ylab("") + 
+  scale_fill_manual(
+    values=pal
+  ) + 
+  labs(
+    caption = "Source: Heating and Cooling Vienna 2040 Report. Figure: Sofia Evtushenko",
+    title = "Future composition of district heating energy sources [GWh/a]"
+  ) +
+  theme(
+    panel.grid = element_blank(),
+    
+    axis.text.y=element_blank(),
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.background  = element_rect(fill = "white", color = "white"),
+    axis.text.x = element_text(color = "black", family = "Roboto Condensed", size=13),
+    axis.line.x = element_line(color = "black", size = 0.5),
+    
+    
+    plot.margin = margin(20,150,5,0),
+    
+    legend.title = element_blank(),
+    legend.key.width = unit(0.4, "cm"),
+    legend.key.height = unit(1, "cm"),
+    legend.box.margin = margin(0, 0, 0, 0), 
+    legend.spacing = unit(0, "pt"),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.position = c(1.1, 0.5),
+    legend.text = element_text(family = "Roboto Condensed", size = 13),
+    
+    plot.caption = element_text(family = "Roboto Condensed", size = 12, hjust = 2),
+    plot.title = element_text(family = "Roboto Condensed", size = 24, face = "bold")
+  )
+
+ggsave(
+  save_path,
+  dpi=320,
+  width = 9,
+  height = 7
+)
+```
+
+### References
